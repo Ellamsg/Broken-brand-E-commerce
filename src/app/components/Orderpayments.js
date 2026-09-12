@@ -5,8 +5,9 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import useCartStore from "../cartStore";
 import Link from "next/link";
-import { createOrder } from "../../../sanity/sanity-utils";
 import { PaystackButton } from "react-paystack";
+// NOTE: createOrder is no longer called from the browser.
+// Order creation now happens server-side after verifying the payment.
 
 const Orderpayments = () => {
   const router = useRouter();
@@ -23,31 +24,53 @@ const Orderpayments = () => {
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
   const [city, setCity] = useState("");
+  const [isVerifying, setIsVerifying] = useState(false);
 
-  //send order to sanity
-  const onSend = async () => {
+  // Called after Paystack popup closes with a successful reference.
+  // We do NOT trust the browser — instead we send the reference to our
+  // Next.js API route which verifies with Paystack servers before saving.
+  const onPaymentSuccess = async (response) => {
+    const reference = response.reference;
+    const userEmail = session?.data?.user?.email;
+
+    if (!reference || !userEmail) {
+      alert("Something went wrong. Please contact support with your payment reference: " + reference);
+      return;
+    }
+
+    setIsVerifying(true);
+
     try {
-      // Save the email from the session data
-      const email = session.data.user.email;
+      const res = await fetch("/api/verify-payment", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          reference,
+          email: userEmail,
+          cart,
+        }),
+      });
 
-      // Create a Sanity order with the email and cart data
-      if (email) {
-        const res = await createOrder(email, cart);
+      const data = await res.json();
 
-        // Clear the cart if the order creation is successful
-        if (res) {
-          clearCart();
-          // Redirect to a different page
-          router?.push("/order");
-        }
+      if (data.success) {
+        clearCart();
+        alert("Thanks for doing business with us! Come back soon!!");
+        router?.push("/order");
+      } else {
+        // Payment failed verification — no order created
+        alert(
+          `Payment could not be verified. No order was placed. ` +
+          `Please contact support with this reference: ${reference}`
+        );
       }
-
-      // Show a success message to the user
-      alert("Thanks for doing business with us! Come back soon!!");
     } catch (error) {
-      // Handle any errors that occur during the process
-      console.error(error);
-      alert("An error occurred while processing the order.");
+      console.error("Verification request failed:", error);
+      alert(
+        `Network error during verification. Please contact support with this reference: ${reference}`
+      );
+    } finally {
+      setIsVerifying(false);
     }
   };
 
@@ -92,10 +115,14 @@ const Orderpayments = () => {
     publicKey,
     text: "PAY NOW",
     onSuccess: (response) => {
-      console.log("Paystack API Response:", response);
-      onSend();
+      console.log("Paystack reference received:", response.reference);
+      onPaymentSuccess(response);
     },
-    onClose: () => alert("Wait! Don't leave :("),
+    onClose: () => {
+      if (!isVerifying) {
+        alert("Payment cancelled. Your cart is still saved.");
+      }
+    },
   };
 
   if (!session) return <div>not logged in</div>;
@@ -176,12 +203,21 @@ const Orderpayments = () => {
               </form>
 
               <div className="flex md:flex-row pt-4 flex-col justify-between">
-                <PaystackButton
-                  className="text-black mt-3 bg-white p-3 "
-                  {...componentProps}
-                />
+                {isVerifying ? (
+                  <p className="text-white mt-3 p-3 opacity-70 animate-pulse">
+                    ⏳ Verifying payment, please wait...
+                  </p>
+                ) : (
+                  <PaystackButton
+                    className="text-black mt-3 bg-white p-3 "
+                    {...componentProps}
+                  />
+                )}
               <Link className="md:order-first" href="/cart">
-              <button className="text-white  mt-3 border-2 border-white p-3">
+              <button
+                disabled={isVerifying}
+                className="text-white mt-3 border-2 border-white p-3 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
                   GO BACK{" "}
                 </button>
               </Link>

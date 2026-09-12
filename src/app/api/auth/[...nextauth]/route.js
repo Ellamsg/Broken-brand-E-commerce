@@ -5,7 +5,7 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import connect from "@/utils/db";
 
-const handler = NextAuth({
+export const authOptions = {
     providers: [
       GoogleProvider({
         clientId: process.env.GOOGLE_CLIENT_ID,
@@ -17,19 +17,16 @@ const handler = NextAuth({
         async authorize(credentials) {
           await connect();
           try {
-            const user =await User.findOne({ email: credentials.email });
+            const user = await User.findOne({ email: credentials.email });
             if (user) {
-              //check for password
               const isPasswordCorrect = await bcrypt.compare(
                 credentials.password,
                 user.password
               );
-  
-              if(isPasswordCorrect){
-                return user
-              } else{
+              if (isPasswordCorrect) {
+                return user;
+              } else {
                 throw new Error("wrong credentials");
-  
               }
             } else {
               throw new Error("user not found");
@@ -40,10 +37,11 @@ const handler = NextAuth({
         },
       }),
     ],
-    pages:{
-      error:"/cart/login"
+    pages: {
+      error: "/cart/login"
     }
-  });
-  
-  export { handler as GET, handler as POST };
-  
+};
+
+const handler = NextAuth(authOptions);
+
+export { handler as GET, handler as POST };
