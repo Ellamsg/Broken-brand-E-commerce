@@ -1,5 +1,5 @@
 "use client";
-import React from "react";
+import React, { useEffect } from "react";
 
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -13,25 +13,47 @@ const Cart = () => {
   const cartTotal = useCartStore((state) => state.cartTotal);
   const clearCart = useCartStore((state) => state.clearCart);
   const removeFromCart = useCartStore((state) => state.removeFromCart);
+  const loadCart = useCartStore((state) => state.loadCart);
+  const isLoaded = useCartStore((state) => state.isLoaded);
+
+  // Load cart from Sanity once the user session is confirmed
+  useEffect(() => {
+    if (session.status === "authenticated" && !isLoaded) {
+      loadCart();
+    }
+  }, [session.status, isLoaded, loadCart]);
 
   if (!session) return <div>not logged in</div>;
 
   if (session.status === "loading") {
-    return <p className="text-center">loading...</p>;
+    return (
+      <div className="flex flex-col items-center justify-center py-20 gap-4">
+        <div className="w-8 h-8 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+        <p className="text-xs uppercase tracking-widest text-gray">Loading...</p>
+      </div>
+    );
   }
 
   if (session.status === "unauthenticated") {
     router?.push("/cart/login");
+    return null;
   }
 
   const handleRemoveFromCart = (productId) => {
     removeFromCart(productId);
   };
 
-  // Function to save cart data to local storage
+  if (session.status === "authenticated") {
 
-  if (session.status === "authenticated"){
-    
+    if (!isLoaded) {
+      return (
+        <div className="flex flex-col items-center justify-center py-20 gap-4">
+          <div className="w-8 h-8 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-xs uppercase tracking-widest text-gray">Loading your cart...</p>
+        </div>
+      );
+    }
+
     return (
       <div className="space py-6">
         <p className="text-[16px]  underline">CART</p>
@@ -49,7 +71,7 @@ const Cart = () => {
               className="flex justify-between border-white border-b-2 py-4"
               key={product.id}
             >
-              <div className=" md:w-[33.3%] flex gap-1 md:gap-5">
+              <Link href={`/details/${product.slug}`} className="md:w-[33.3%] flex gap-1 md:gap-5 cursor-pointer hover:opacity-80 transition-opacity">
                 <img
                   src={product.image2}
                   className=" size-[90px]  md:size-[200px]"
@@ -62,7 +84,7 @@ const Cart = () => {
                 </p>
                   <p className="md:text-[16px] text-[13px]">SIZE:{product.size}</p>{" "}
                 </div>
-              </div>
+              </Link>
 
           
 
@@ -86,25 +108,28 @@ const Cart = () => {
           ))
         )}
 
-        <div className="flex lg:justify-end">
-          <div className="lg:w-[50%] w-[100%]">
-            <div className="flex py-3 md:text-[16px] text-[13px] border-b-2 border-white justify-between">
-              <p className="uppercase md:text-[16px] text-[13px]">SubTotal</p>
-              <p>NGN{cartTotal && (cartTotal / 100).toLocaleString()} </p>
-            </div>
-
-            <div className=" py-3 flex md:text-[1.5rem] text-[13px] justify-between">
-              <p className="uppercase  md:text-[16px] text-[13px]">Total</p>
-              <p>NGN{cartTotal && (cartTotal / 100).toLocaleString()} </p>
-            </div>
-
-            <Link href="/payments">
-              <div className="bg-white text-center text-black py-3 w-[100%]">
-                <p> NGN{cartTotal && (cartTotal / 100).toLocaleString()} GO TO CHECKOUT</p>
+        {/* Only show totals and checkout button when cart has items */}
+        {cart.length > 0 && (
+          <div className="flex lg:justify-end">
+            <div className="lg:w-[50%] w-[100%]">
+              <div className="flex py-3 md:text-[16px] text-[13px] border-b-2 border-white justify-between">
+                <p className="uppercase md:text-[16px] text-[13px]">SubTotal</p>
+                <p>NGN{cartTotal && (cartTotal / 100).toLocaleString()} </p>
               </div>
-            </Link>
+
+              <div className=" py-3 flex md:text-[1.5rem] text-[13px] justify-between">
+                <p className="uppercase  md:text-[16px] text-[13px]">Total</p>
+                <p>NGN{cartTotal && (cartTotal / 100).toLocaleString()} </p>
+              </div>
+
+              <Link href="/payments">
+                <div className="bg-white text-center text-black py-3 w-[100%]">
+                  <p> NGN{cartTotal && (cartTotal / 100).toLocaleString()} GO TO CHECKOUT</p>
+                </div>
+              </Link>
+            </div>
           </div>
-        </div>
+        )}
       </div>
     );
   }

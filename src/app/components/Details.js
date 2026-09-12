@@ -36,6 +36,7 @@ const Details = () => {
                     price,
                     soldout,
                     _createdAt,
+                    "slug": slug.current,
                     "image":image.asset->url,
                     "image2":image2.asset->url,
                     "image3":image3.asset->url
